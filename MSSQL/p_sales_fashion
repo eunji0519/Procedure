@@ -1,0 +1,189 @@
+/****** Object:  StoredProcedure [dbo].[p_sales_fashion]    Script Date: 2023-05-04 오전 10:54:29 ******/
+/***********************************************************************
+Bluebell Korea - BIT
+Create Store Procedure - [p_sales_fashion]
+
+Procedure Name = p_sales_fashion
+Procedure Version: 1.0.0
+Detail: Get txCount of nationality in brand
+
+Parameter:
+Input:
+Output:
+
+Modification:
+ejkim 2023 03 31 Initial Development
+ejkim 2023 05 04 Modification Development
+***********************************************************************/
+ALTER procedure [dbo].[p_sales_fashion]
+	@v_get_brand_id nvarchar(10) = null, -- 브랜드 아이디 받아오기
+	@v_get_note nvarchar(max) = null -- 비고란 받아오기
+as
+	declare
+	@n_cnt int -- 데이터가 있는 지 확인하기 위한 개수 담는 변수
+begin
+-- 전체마감이면?
+	if @v_get_brand_id is null
+		begin
+			-- 전월에 데이터 유무 확인
+			begin
+				select @n_cnt = count(*)
+		  		  from brs_c_sales
+				where format(TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+				;
+			end
+
+			-- 데이터가 있다면?
+			if @n_cnt <> 0
+				-- 데이터를 지운다.
+				begin
+					-- 1. txdata
+					delete from brs_c_TXData
+					 where format(Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+					;
+					-- 2. sales nationality
+					delete from brs_c_nationality_sales
+					  from brs_c_nationality_sales bcns
+					 inner join brs_c_sales bcs
+						on bcns.FullTX_ID = bcs.FullTX_ID
+					 where format(bcs.TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+					;
+					-- 3. sales
+					delete from brs_c_sales
+					 where format(TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+					;
+				end
+
+				-- 데이터를 넣는다.
+				begin
+					-- 1. txdata
+					insert into brs_c_TXData
+					select bt.*, getdate()
+					  from brs_TXData bt
+					 where format(Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+
+					-- 2. nationality sales
+					insert into brs_c_nationality_sales
+					select bns.*, getdate()
+					  from brs_nationality_sales bns
+					 inner join brs_sales bs
+						on bns.FullTX_ID = bs.FullTX_ID
+					 where format(bs.TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+					;
+					-- 3. sales
+					insert into brs_c_sales(Store_ID
+										  , TX_Date
+										  , Channel
+										  , FullTX_ID
+										  , Qty
+										  , Gross_Sales
+										  , Net_Sales
+										  , Walkin
+										  , Bill
+										  , Closing_Date
+										  )
+									 select Store_ID
+										  , TX_Date
+										  , Channel
+										  , FullTX_ID
+										  , Qty
+										  , Gross_Sales
+										  , Net_Sales
+										  , Walkin
+										  , Bill
+										  , getdate()
+									   from brs_sales
+									  where format(TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+					;
+			end
+		end			
+	
+	-- 부분마감이면?
+	else
+		begin
+			-- 데이터를 지운다.
+			begin
+				-- 1. txdata
+				delete from brs_c_TXData
+				  from brs_c_TXData bct
+				 inner join bbis_store st
+					on bct.Store_ID = st.Store_ID
+				 inner join bbis_brand br
+					on st.Brand_ID = br.Brand_ID
+				 where br.Brand_ID = @v_get_brand_id
+				   and format(bct.Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+				;
+				-- 2. nationality sales
+				delete from brs_c_nationality_sales
+				  from brs_c_nationality_sales bcns
+				 inner join brs_c_sales bcs
+					on bcns.FullTX_ID = bcs.FullTX_ID
+				 inner join bbis_store st
+					on bcs.Store_ID = st.Store_ID
+				 inner join bbis_brand br
+					on st.Brand_ID = br.Brand_ID
+				 where br.Brand_ID = @v_get_brand_id
+				   and format(bcs.TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+				;
+				-- 3. sales
+				delete from brs_c_sales
+				  from brs_c_sales bcs
+				 inner join bbis_store st
+					on bcs.Store_ID = st.Store_ID
+				 inner join bbis_brand br
+				   on st.Brand_ID = br.Brand_ID
+				where br.Brand_ID = @v_get_brand_id
+				  and format(bcs.TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+				;
+			end
+			-- 데이터를 넣는다.
+			begin
+				-- 1. txdata
+				insert into brs_c_TXData
+				select bt.*, getdate()
+				  from brs_TXData bt
+				 inner join bbis_store st
+					on bt.Store_ID = st.Store_ID
+				 inner join bbis_brand br
+					on st.Brand_ID = br.Brand_ID
+				 where br.Brand_ID = @v_get_brand_id
+				   and format(bt.Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+				;
+				-- 2. nationality sales
+				insert into brs_c_nationality_sales
+				select bns.*, getdate()
+				  from brs_nationality_sales bns
+				 inner join brs_sales bs
+					on bns.FullTX_ID = bs.FullTX_ID
+				 inner join bbis_store st
+					on bs.Store_ID = st.Store_ID
+				 inner join bbis_brand br
+					on st.Brand_ID = br.Brand_ID
+				 where br.Brand_ID = @v_get_brand_id
+				   and format(bs.TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+				;
+				-- 3. sales
+				insert into brs_c_sales(Store_ID
+									  , TX_Date
+									  , Channel
+									  , FullTX_ID
+									  , Qty
+									  , Gross_Sales
+									  , Net_Sales
+									  , Walkin
+									  , Bill
+									  , Closing_Date
+									  , note
+									  )
+				select bs.Store_ID, bs.TX_Date, bs.Channel, bs.FullTX_ID, bs.Qty, bs.Gross_Sales, bs.Net_Sales, bs.Walkin, bs.Bill, getdate(), @v_get_note
+				  from brs_sales bs
+		 		 inner join bbis_store st
+					on bs.Store_ID = st.Store_ID
+				 inner join bbis_brand br
+				    on st.Brand_ID = br.Brand_ID
+				 where br.Brand_ID = @v_get_brand_id
+				   and format(bs.TX_Date, 'yyyyMM') = format(dateadd(month, -1, getdate()),'yyyyMM')
+				;
+			end
+		end
+end
